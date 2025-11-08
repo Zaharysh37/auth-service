@@ -57,7 +57,13 @@ public class SecurityConfig {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/api/auth/login", "/api/auth/register", "/.well-known/jwks.json")
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/register",
+                    "/api/auth/refresh",
+                    "/api/auth/.well-known/jwks.json",
+                    "/actuator/health"
+                )
                 .permitAll()
                 .anyRequest()
                 .authenticated()

@@ -23,7 +23,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(schema = "credentials")
+@Table(name = "credentials")
 public class Credential implements UserDetails {
 
     @Id

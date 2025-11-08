@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtService {
 
+    public static final String KEY_ID = "main-rsa-key";
+
     private static final SignatureAlgorithm ALGORITHM = Jwts.SIG.RS256;
     private final KeyPair keyPair = ALGORITHM.keyPair().build();
     public final PrivateKey privateKey;
@@ -55,6 +57,7 @@ public class JwtService {
             .collect(Collectors.joining(" "));
 
         return Jwts.builder()
+            .header().keyId(KEY_ID).and()
             .subject(credential.getSub().toString())
             .claim("scope", scope)
             .issuedAt(Date.from(now))
@@ -66,6 +69,7 @@ public class JwtService {
     private String buildRefreshToken(UUID sub) {
         Instant now = Instant.now();
         return Jwts.builder()
+            .header().keyId(KEY_ID).and()
             .subject(sub.toString())
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plus(refreshTokenExpirationDays, ChronoUnit.DAYS)))
