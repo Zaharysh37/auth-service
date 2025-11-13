@@ -21,10 +21,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -36,6 +38,7 @@ public class AuthService {
     @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
     private String userServiceUrl;
 
+    @Transactional
     public GetAuthDto login(CreateAuthDto getAuthDto) {
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(
@@ -58,6 +61,7 @@ public class AuthService {
         }
     }
 
+    @Transactional
     public boolean register(CreateAuthDto createAuthDto) {
 
         Credential credential = Credential.builder()
@@ -87,6 +91,7 @@ public class AuthService {
         return true;
     }
 
+    @Transactional
     public GetAuthDto refreshToken(GetRefreshTokenDto dto) {
         String refreshToken = dto.getRefreshToken();
 
