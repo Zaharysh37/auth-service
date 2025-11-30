@@ -1,4 +1,4 @@
-package com.innowise.authservice.core.config;
+package com.innowise.authservice.core.filters;
 
 import com.innowise.authservice.core.dao.CredentialRepository;
 import com.innowise.authservice.core.entity.Credential;
@@ -64,8 +64,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (JwtException e) {
-        }
+        } catch (JwtException e) { }
 
         filterChain.doFilter(request, response);
     }
