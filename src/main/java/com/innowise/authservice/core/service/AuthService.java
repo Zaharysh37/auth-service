@@ -1,6 +1,5 @@
 package com.innowise.authservice.core.service;
 
-import com.innowise.authservice.api.dto.CreateProfileDto;
 import com.innowise.authservice.api.dto.GetRefreshTokenDto;
 import com.innowise.authservice.api.dto.authdto.CreateAuthDto;
 import com.innowise.authservice.api.dto.authdto.GetAuthDto;
@@ -10,11 +9,11 @@ import com.innowise.authservice.core.entity.Role;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import io.jsonwebtoken.JwtException;
+import jakarta.persistence.EntityNotFoundException;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,7 +21,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -33,17 +31,13 @@ public class AuthService {
     private final CredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final RestTemplate restTemplate;
-
-    @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
-    private String userServiceUrl;
 
     @Transactional
-    public GetAuthDto login(CreateAuthDto getAuthDto) {
+    public GetAuthDto login(CreateAuthDto createAuthDto) {
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(
-                getAuthDto.getEmail(),
-                getAuthDto.getPassword()
+                createAuthDto.getEmail(),
+                createAuthDto.getPassword()
             )
         );
 
@@ -62,33 +56,20 @@ public class AuthService {
     }
 
     @Transactional
-    public boolean register(CreateAuthDto createAuthDto) {
+    public UUID register(CreateAuthDto createAuthDto) {
+
+        UUID uuid = UUID.randomUUID();
 
         Credential credential = Credential.builder()
-            .sub(UUID.randomUUID())
+            .sub(uuid)
             .email(createAuthDto.getEmail())
             .password(passwordEncoder.encode(createAuthDto.getPassword()))
             .role(Role.ROLE_USER)
             .build();
 
-        CreateProfileDto profileDto = CreateProfileDto.builder()
-            .sub(credential.getSub())
-            .name(createAuthDto.getName())
-            .surname(createAuthDto.getSurname())
-            .birthDate(createAuthDto.getBirthDate())
-            .email(createAuthDto.getEmail())
-            .build();
+        credentialRepository.save(credential);
 
-        try {
-            restTemplate.postForEntity(userServiceUrl, profileDto, String.class);
-
-            credentialRepository.save(credential);
-        } catch (Exception e) {
-            return false;
-
-        }
-
-        return true;
+        return uuid;
     }
 
     @Transactional
@@ -110,6 +91,13 @@ public class AuthService {
                 .accessToken(tokens.get("access_token"))
                 .refreshToken(tokens.get("refresh_token"))
                 .build();
+    }
+
+    @Transactional
+    public void deleteUserBySub(UUID sub) {
+        Credential existingCred = credentialRepository.findBySub(sub)
+            .orElseThrow(() -> new EntityNotFoundException("User not found with sub: " + sub));
+        credentialRepository.delete(existingCred);
     }
 
     public Map<String, Object> getJwtSet() {
