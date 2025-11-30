@@ -3,6 +3,7 @@ package com.innowise.authservice.core.exception;
 import com.innowise.authservice.api.dto.GetErrorDto;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -38,6 +39,18 @@ public class GlobalExceptionHandler {
             ex,
             "A resource with these details already exists or violates data constraints.", // Безопасное сообщение
             HttpStatus.CONFLICT,
+            request
+        );
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<GetErrorDto> handleEntityNotFoundException(
+        EntityNotFoundException ex, WebRequest request) {
+
+        return buildErrorResponse(
+            ex,
+            ex.getMessage(),
+            HttpStatus.NOT_FOUND,
             request
         );
     }
