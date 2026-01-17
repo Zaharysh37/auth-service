@@ -13,6 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 )
 public interface UserClient {
 
-    @GetMapping("/emile")
+    @GetMapping("/email")
     GetUserDto getUserByEmail(@RequestParam("email") String email);
 }

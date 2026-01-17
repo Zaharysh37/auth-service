@@ -31,7 +31,7 @@ public class JwtService {
     @Value("${jwt.access-token.expiration-minutes:15}")
     private long accessTokenExpirationMinutes;
 
-    @Value("${jwt.refresh-token.expiration-days:7}")
+    @Value("${jwt.refresh-token.expiration-hours:2}")
     private long refreshTokenExpirationDays;
 
     public JwtService() {
@@ -39,8 +39,8 @@ public class JwtService {
         this.publicKey = keyPair.getPublic();
     }
 
-    public Map<String, String> generateTokens(Credential credential) {
-        String accessToken = buildAccessToken(credential);
+    public Map<String, String> generateTokens(Credential credential, Long userId) {
+        String accessToken = buildAccessToken(credential, userId);
         String refreshToken = buildRefreshToken(credential.getSub());
 
         Map<String, String> tokens = new HashMap<>();
@@ -49,7 +49,7 @@ public class JwtService {
         return tokens;
     }
 
-    private String buildAccessToken(Credential credential) {
+    private String buildAccessToken(Credential credential, Long userId) {
         Instant now = Instant.now();
 
         String scope = credential.getAuthorities().stream()
@@ -60,6 +60,7 @@ public class JwtService {
             .header().keyId(KEY_ID).and()
             .subject(credential.getSub().toString())
             .claim("scope", scope)
+            .claim("userId", userId.toString())
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plus(accessTokenExpirationMinutes, ChronoUnit.MINUTES)))
             .signWith(privateKey, ALGORITHM)
