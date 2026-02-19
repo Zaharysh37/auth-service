@@ -5,10 +5,14 @@ import com.innowise.authservice.api.dto.authdto.CreateAuthDto;
 import com.innowise.authservice.api.dto.authdto.GetAuthDto;
 import com.innowise.authservice.core.service.AuthService;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,11 +31,9 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody CreateAuthDto createAuthDto) {
-        if (authService.register(createAuthDto)) return ResponseEntity.status(HttpStatus.CREATED)
-            .body("User registered successfully!");
-        else return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .body("Error: User Profile Service is unavailable. Registration failed.");
+    @PreAuthorize("hasRole('INTERNAL')")
+    public UUID register(@RequestBody CreateAuthDto createAuthDto) {
+        return authService.register(createAuthDto);
     }
 
     @PostMapping("/refresh")
@@ -47,5 +49,12 @@ public class AuthController {
     @GetMapping("/.well-known/jwks.json")
     public ResponseEntity<Map<String, Object>> getJwtSet() {
         return ResponseEntity.ok(authService.getJwtSet());
+    }
+
+    @DeleteMapping("/internal/user/{sub}")
+    @PreAuthorize("hasRole('INTERNAL')")
+    public ResponseEntity<Void> rollbackUser(@PathVariable UUID sub) {
+        authService.deleteUserBySub(sub);
+        return new ResponseEntity<>(null, HttpStatus.NO_CONTENT);
     }
 }

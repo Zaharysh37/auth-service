@@ -1,6 +1,9 @@
 package com.innowise.authservice.core.service;
 
-import com.innowise.authservice.api.dto.CreateProfileDto;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.innowise.authservice.api.client.GetUserDto;
+import com.innowise.authservice.api.client.UserClient;
 import com.innowise.authservice.api.dto.GetRefreshTokenDto;
 import com.innowise.authservice.api.dto.authdto.CreateAuthDto;
 import com.innowise.authservice.api.dto.authdto.GetAuthDto;
@@ -10,11 +13,12 @@ import com.innowise.authservice.core.entity.Role;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import io.jsonwebtoken.JwtException;
+import jakarta.persistence.EntityNotFoundException;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,7 +26,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -33,24 +36,31 @@ public class AuthService {
     private final CredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final RestTemplate restTemplate;
+    private final UserClient userClient;
 
-    @Value("${app.userservice.url:http://localhost:8081/api/users/internal/register}")
-    private String userServiceUrl;
+    private final Cache<String, Long> emailToUserIdCache =
+        Caffeine.newBuilder()
+            .expireAfterWrite(2, TimeUnit.HOURS)
+            .maximumSize(1000)
+            .build();
 
     @Transactional
-    public GetAuthDto login(CreateAuthDto getAuthDto) {
+    public GetAuthDto login(CreateAuthDto createAuthDto) {
+
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(
-                getAuthDto.getEmail(),
-                getAuthDto.getPassword()
+                createAuthDto.getEmail(),
+                createAuthDto.getPassword()
             )
         );
 
         if (authentication.isAuthenticated()) {
+
             Credential credential = (Credential) authentication.getPrincipal();
 
-            Map<String, String> tokens = jwtService.generateTokens(credential);
+            Long userId = getUserIdByEmail(createAuthDto.getEmail());
+
+            Map<String, String> tokens = jwtService.generateTokens(credential, userId);
 
             return GetAuthDto.builder()
                     .accessToken(tokens.get("access_token"))
@@ -62,37 +72,25 @@ public class AuthService {
     }
 
     @Transactional
-    public boolean register(CreateAuthDto createAuthDto) {
+    public UUID register(CreateAuthDto createAuthDto) {
+
+        UUID uuid = UUID.randomUUID();
 
         Credential credential = Credential.builder()
-            .sub(UUID.randomUUID())
+            .sub(uuid)
             .email(createAuthDto.getEmail())
             .password(passwordEncoder.encode(createAuthDto.getPassword()))
             .role(Role.ROLE_USER)
             .build();
 
-        CreateProfileDto profileDto = CreateProfileDto.builder()
-            .sub(credential.getSub())
-            .name(createAuthDto.getName())
-            .surname(createAuthDto.getSurname())
-            .birthDate(createAuthDto.getBirthDate())
-            .email(createAuthDto.getEmail())
-            .build();
+        credentialRepository.save(credential);
 
-        try {
-            restTemplate.postForEntity(userServiceUrl, profileDto, String.class);
-
-            credentialRepository.save(credential);
-        } catch (Exception e) {
-            return false;
-
-        }
-
-        return true;
+        return uuid;
     }
 
     @Transactional
     public GetAuthDto refreshToken(GetRefreshTokenDto dto) {
+
         String refreshToken = dto.getRefreshToken();
 
         if (jwtService.isTokenExpired(refreshToken)) {
@@ -104,7 +102,9 @@ public class AuthService {
         Credential credential = credentialRepository.findBySub(UUID.fromString(sub))
             .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        Map<String, String> tokens = jwtService.generateTokens(credential);
+        Long userId = getUserIdByEmail(credential.getEmail());
+
+        Map<String, String> tokens = jwtService.generateTokens(credential, userId);
 
         return GetAuthDto.builder()
                 .accessToken(tokens.get("access_token"))
@@ -112,12 +112,33 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional
+    public void deleteUserBySub(UUID sub) {
+
+        Credential existingCred = credentialRepository.findBySub(sub)
+            .orElseThrow(() -> new EntityNotFoundException("User not found with sub: " + sub));
+        credentialRepository.delete(existingCred);
+        updateUserCache(existingCred.getEmail());
+    }
+
     public Map<String, Object> getJwtSet() {
+
         RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) jwtService.getPublicKey())
             .keyID(JwtService.KEY_ID)
             .build();
 
         JWKSet jwkSet = new JWKSet(rsaKey);
         return jwkSet.toJSONObject();
+    }
+
+    Long getUserIdByEmail(String email) {
+        return emailToUserIdCache.get(email, kkey -> {
+            GetUserDto getUserDto = userClient.getUserByEmail(email);
+            return getUserDto.id();
+        });
+    }
+
+    public void updateUserCache(String email) {
+        emailToUserIdCache.invalidate(email);
     }
 }

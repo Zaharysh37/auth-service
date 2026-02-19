@@ -1,7 +1,18 @@
-FROM eclipse-temurin:17-jdk-jammy
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
-ARG JAR_FILE=target/*.jar
+WORKDIR /app
 
-COPY ${JAR_FILE} app.jar
+COPY pom.xml .
+COPY src ./src
 
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+COPY --from=builder /app/target/*.jar app.jar
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
