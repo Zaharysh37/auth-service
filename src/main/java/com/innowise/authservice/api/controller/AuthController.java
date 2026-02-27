@@ -9,6 +9,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("hasRole('INTERNAL')")
     public UUID register(@RequestBody CreateAuthDto createAuthDto) {
         return authService.register(createAuthDto);
     }
@@ -50,6 +52,7 @@ public class AuthController {
     }
 
     @DeleteMapping("/internal/user/{sub}")
+    @PreAuthorize("hasRole('INTERNAL')")
     public ResponseEntity<Void> rollbackUser(@PathVariable UUID sub) {
         authService.deleteUserBySub(sub);
         return new ResponseEntity<>(null, HttpStatus.NO_CONTENT);
